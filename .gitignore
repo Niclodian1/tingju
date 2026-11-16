@@ -1,0 +1,26 @@
+.DS_Store
+*.pyc
+__pycache__/
+.venv/
+
+# 用户自有音视频、字幕与本地学习包（可能含版权内容，请勿提交）
+素材/
+学习包/
+
+# 常见媒体与压缩包
+*.mp4
+*.mkv
+*.avi
+*.rmvb
+*.iso
+*.rar
+*.zip
+*.7z
+*.mp3
+*.wav
+*.aiff
+*.flac
+
+# 允许仓库内的原创演示音轨
+!samples/**/*.m4a
+!docs/movies/demo/audio.m4a

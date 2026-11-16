@@ -1,0 +1,60 @@
+1
+00:00:00,400 --> 00:00:02,300
+Hello. My name is Alex.
+你好，我叫亚历克斯。
+
+2
+00:00:03,150 --> 00:00:04,900
+I learn English a little every day.
+我每天都会学一点英语。
+
+3
+00:00:05,750 --> 00:00:07,060
+Please listen carefully.
+请仔细听。
+
+4
+00:00:07,910 --> 00:00:09,160
+Then repeat after me.
+然后跟着我读。
+
+5
+00:00:10,010 --> 00:00:11,900
+Don't be afraid to make mistakes.
+不要害怕犯错。
+
+6
+00:00:12,750 --> 00:00:14,070
+Mistakes help you learn.
+错误能帮助你学习。
+
+7
+00:00:14,920 --> 00:00:16,430
+Practice a little every day.
+每天练习一点点。
+
+8
+00:00:17,280 --> 00:00:19,390
+Take a short break if you feel tired.
+累了就休息一会儿。
+
+9
+00:00:20,240 --> 00:00:22,030
+Come back tomorrow and try again.
+明天再来试一次。
+
+10
+00:00:22,880 --> 00:00:23,780
+You can do this.
+你做得到。
+
+11
+00:00:24,630 --> 00:00:26,530
+Let's start with a simple sentence.
+我们先从一句简单的开始。
+
+12
+00:00:27,380 --> 00:00:29,130
+Thank you for practicing with me.
+谢谢你和我一起练习。
+
