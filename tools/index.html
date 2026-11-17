@@ -774,7 +774,7 @@
       <label for="driveClientIdInput">OAuth 客户端 ID（私有文件夹，需 Google 登录）</label>
       <input id="driveClientIdInput" class="drive-input" type="text" autocomplete="off" spellcheck="false" placeholder="xxx.apps.googleusercontent.com">
     </div>
-    <p class="calib-help">在 Google Cloud 启用 Drive API 后创建密钥，并把 HTTP 引用来源限制为 <strong>https://niclodian1.github.io/*</strong> 以及你实际打开的镜像。OAuth 把这些地址加到「已获授权的 JavaScript 来源」。国内访问 Google 需要你自己的网络条件。</p>
+    <p class="calib-help">创建的是 <strong>API 密钥</strong>，不是 OAuth 客户端。网站限制可先选「无」，API 限制选 Drive API 即可。不要把带 <strong>*</strong> 的地址填进「已获授权的重定向 URI」（那一栏不能写通配符）。若要限制网站，在密钥的「网站」里加两行：<strong>https://niclodian1.github.io</strong> 和 <strong>https://niclodian1.github.io/*</strong>。国内访问 Google 需要你自己的网络条件。</p>
     <p class="calib-help" id="driveStatus">同一文件夹里放一条音频和一个 .srt / .ass 即可。</p>
     <div class="calib-btns">
       <button class="calib-btn" id="btnDriveLoad" type="button">保存并载入</button>

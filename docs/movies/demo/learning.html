@@ -774,7 +774,7 @@
       <label for="driveClientIdInput">OAuth 客户端 ID（私有文件夹，需 Google 登录）</label>
       <input id="driveClientIdInput" class="drive-input" type="text" autocomplete="off" spellcheck="false" placeholder="xxx.apps.googleusercontent.com">
     </div>
-    <p class="calib-help">在 Google Cloud 启用 Drive API 后创建密钥，并把 HTTP 引用来源限制为 <strong>https://niclodian1.github.io/*</strong> 以及你实际打开的镜像。OAuth 把这些地址加到「已获授权的 JavaScript 来源」。国内访问 Google 需要你自己的网络条件。</p>
+    <p class="calib-help">创建的是 <strong>API 密钥</strong>，不是 OAuth 客户端。网站限制可先选「无」，API 限制选 Drive API 即可。不要把带 <strong>*</strong> 的地址填进「已获授权的重定向 URI」（那一栏不能写通配符）。若要限制网站，在密钥的「网站」里加两行：<strong>https://niclodian1.github.io</strong> 和 <strong>https://niclodian1.github.io/*</strong>。国内访问 Google 需要你自己的网络条件。</p>
     <p class="calib-help" id="driveStatus">同一文件夹里放一条音频和一个 .srt / .ass 即可。</p>
     <div class="calib-btns">
       <button class="calib-btn" id="btnDriveLoad" type="button">保存并载入</button>
@@ -840,7 +840,7 @@
     /* __SUBTITLE_DATA_START__ */
     let subtitleData = [{"id":1,"start":0.4,"end":2.3,"en":"Hello. My name is Alex.","zh":"你好，我叫亚历克斯。"},{"id":2,"start":3.15,"end":4.9,"en":"I learn English a little every day.","zh":"我每天都会学一点英语。"},{"id":3,"start":5.75,"end":7.06,"en":"Please listen carefully.","zh":"请仔细听。"},{"id":4,"start":7.91,"end":9.16,"en":"Then repeat after me.","zh":"然后跟着我读。"},{"id":5,"start":10.01,"end":11.9,"en":"Don't be afraid to make mistakes.","zh":"不要害怕犯错。"},{"id":6,"start":12.75,"end":14.07,"en":"Mistakes help you learn.","zh":"错误能帮助你学习。"},{"id":7,"start":14.92,"end":16.43,"en":"Practice a little every day.","zh":"每天练习一点点。"},{"id":8,"start":17.28,"end":19.39,"en":"Take a short break if you feel tired.","zh":"累了就休息一会儿。"},{"id":9,"start":20.24,"end":22.03,"en":"Come back tomorrow and try again.","zh":"明天再来试一次。"},{"id":10,"start":22.88,"end":23.78,"en":"You can do this.","zh":"你做得到。"},{"id":11,"start":24.63,"end":26.53,"en":"Let's start with a simple sentence.","zh":"我们先从一句简单的开始。"},{"id":12,"start":27.38,"end":29.13,"en":"Thank you for practicing with me.","zh":"谢谢你和我一起练习。"}];
     let DEFAULT_OFFSET = 0.00;
-    let MOVIE_META = {"id":"demo","title":"每日口语（演示）","audioFile":"audio.m4a","lines":12,"offset":0.0,"htmlFile":"learning.html","builtAt":"2026-11-17T11:16:00"};
+    let MOVIE_META = {"id":"demo","title":"每日口语（演示）","audioFile":"audio.m4a","lines":12,"offset":0.0,"htmlFile":"learning.html","builtAt":"2026-11-17T14:25:18"};
     /* __SUBTITLE_DATA_END__ */
 
     try {
