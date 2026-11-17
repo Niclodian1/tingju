@@ -2,9 +2,13 @@
 
 一套为**手机精听、跟读、背诵**设计的网页学习工具：书架页 + 每篇课文一个学习页。打开网址就能用。
 
-**手机现在就可以听：** [https://niclodian1.github.io/tingju/](https://niclodian1.github.io/tingju/)
+**国内手机请用这个地址（推荐）：**
 
-iPhone 用 Safari 打开 → 点「每日口语（演示）」→ 点任意一句即可播放。可再点底部分享 →「添加到主屏幕」。
+[https://cdn.jsdmirror.com/gh/Niclodian1/tingju@main/docs/](https://cdn.jsdmirror.com/gh/Niclodian1/tingju@main/docs/)
+
+GitHub Pages 原址 [https://niclodian1.github.io/tingju/](https://niclodian1.github.io/tingju/) 在国内经常连不上，页面本身是正常的。
+
+iPhone 用 Safari 打开上面的镜像 → 点「每日口语（演示）」→ 点任意一句即可播放。可再点底部分享 →「添加到主屏幕」。
 
 - 🎧 **逐句同步**：点击任意一句，跳到音频对应位置播放。
 - 🎯 **时间轴校准**：音频和字幕来源不同时，可自动测量 + 手动微调。
