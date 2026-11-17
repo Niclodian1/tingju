@@ -109,6 +109,11 @@
 
     .btn-primary { background: var(--accent); color: #0f172a; }
     .btn-primary:active { opacity: 0.85; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
 
     .empty {
       text-align: center;
@@ -163,7 +168,7 @@
     }
 
     const grid = document.getElementById("grid");
-    document.getElementById("count").textContent = library.length;
+    document.getElementById("count").textContent = library.length + 1;
 
     if (!library.length) {
       grid.innerHTML = '<div class="empty">书架还是空的<br>用 tools/build_offline_pack.py 打包第一篇课文，或在学习页导入自己的音频和字幕</div>';
@@ -191,6 +196,20 @@
           grid.appendChild(card);
         });
     }
+
+    const importCard = document.createElement("div");
+    importCard.className = "movie-card";
+    importCard.innerHTML = `
+      <h2>导入我的课文</h2>
+      <div class="movie-meta">
+        <span class="tag">音频 + 字幕</span>
+        <span>自己的材料在手机上逐句跟读</span>
+      </div>
+      <div class="movie-actions">
+        <a class="btn btn-secondary" href="movies/demo/learning.html?import=1">导入音频和字幕</a>
+      </div>
+    `;
+    grid.appendChild(importCard);
   </script>
 </body>
 </html>

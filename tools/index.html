@@ -212,6 +212,31 @@
       border: 1px solid rgba(34, 197, 94, 0.35);
     }
 
+    .audio-source-banner.warn {
+      background: rgba(251, 191, 36, 0.12);
+      border: 1px solid rgba(251, 191, 36, 0.45);
+    }
+
+    .banner-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .mismatch-banner {
+      display: none;
+      margin: 0 16px 8px;
+      background: rgba(251, 191, 36, 0.14);
+      border: 1px solid rgba(251, 191, 36, 0.4);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: #fde68a;
+      line-height: 1.55;
+    }
+
+    .mismatch-banner.show { display: block; }
+
     .audio-info {
       font-size: 0.82rem;
       color: var(--text-secondary);
@@ -647,13 +672,26 @@
     </div>
   </div>
 
-  <!-- 本地音频加载横幅 -->
-  <div class="audio-source-banner" id="audioBanner">
-    <div class="audio-info">
-      <strong id="audioFileName">未载入音频</strong>
-      <span id="audioStatusText">支持手机加载 MP3/M4A 等音频</span>
+  <!-- 本地音频 / 字幕加载横幅 -->
+  <div class="banner-stack">
+    <div class="audio-source-banner" id="audioBanner">
+      <div class="audio-info">
+        <strong id="audioFileName">未载入音频</strong>
+        <span id="audioStatusText">支持手机加载 MP3/M4A 等音频</span>
+      </div>
+      <button class="btn-action" id="btnSelectAudio">载入音频</button>
     </div>
-    <button class="btn-action" id="btnSelectAudio">载入音频</button>
+    <div class="audio-source-banner" id="subBanner">
+      <div class="audio-info">
+        <strong id="subFileName">台词未配对</strong>
+        <span id="subStatusText">逐句跟读依赖字幕，请导入与音频配套的 SRT / ASS</span>
+      </div>
+      <button class="btn-action" id="btnImportSubBanner">导入字幕</button>
+    </div>
+    <button class="btn-action" id="btnImportLesson" style="align-self:flex-start;margin:0 16px;">同时导入音频+字幕</button>
+  </div>
+  <div class="mismatch-banner" id="mismatchBanner">
+    当前台词和这段音频对不上。载入音频不会自动生成句子，请再点「导入字幕」，选择配套的 .srt / .ass 文件（iPhone 可在「文件」里把字幕改成 .txt 再选）。
   </div>
 
   <!-- 时间轴校准面板（片源与字幕来源不同时使用） -->
@@ -676,9 +714,10 @@
     </div>
   </div>
 
-  <!-- 隐藏的文件选择器 -->
-  <input type="file" id="audioFileInput" accept="audio/*,video/*,.mp3,.m4a,.wav,.aac,.flac,.mp4,.mkv">
-  <input type="file" id="subFileInput" accept=".srt,.vtt,.lrc,.json,.ass,.ssa,text/plain">
+  <!-- 隐藏的文件选择器：accept 放宽，避免 iPhone 把 .srt 灰掉选不中 -->
+  <input type="file" id="audioFileInput" accept="audio/*,video/*,.mp3,.m4a,.wav,.aac,.flac,.mp4,.mkv,.m4v">
+  <input type="file" id="subFileInput" accept="*/*">
+  <input type="file" id="lessonFileInput" accept="*/*" multiple>
 
   <!-- 原生 Audio 对象 -->
   <audio id="audioPlayer" preload="auto" playsinline webkit-playsinline></audio>
@@ -750,6 +789,14 @@
     let MOVIE_META = { id: "demo", title: "每日口语（演示）", audioFile: "audio.m4a", lines: 12 };
     /* __SUBTITLE_DATA_END__ */
 
+    try {
+      if (typeof location !== "undefined" && /(?:\?|&)import=1(?:&|$)/.test(String(location.search || ""))) {
+        MOVIE_META = { id: "import", title: "导入我的课文", audioFile: "", lines: 0 };
+        subtitleData = [];
+        DEFAULT_OFFSET = 0;
+      }
+    } catch (e) { /* Node 测试环境忽略 */ }
+
     // 打包脚本注入完整字幕后，这里仍指向"内置字幕"用于一键恢复
     const BUILTIN_SUBTITLE_DATA = subtitleData;
 
@@ -793,7 +840,14 @@
     const btnSelectAudio = document.getElementById("btnSelectAudio");
     const audioFileInput = document.getElementById("audioFileInput");
     const subFileInput = document.getElementById("subFileInput");
+    const lessonFileInput = document.getElementById("lessonFileInput");
     const btnImportSub = document.getElementById("btnImportSub");
+    const btnImportSubBanner = document.getElementById("btnImportSubBanner");
+    const btnImportLesson = document.getElementById("btnImportLesson");
+    const subBanner = document.getElementById("subBanner");
+    const subFileName = document.getElementById("subFileName");
+    const subStatusText = document.getElementById("subStatusText");
+    const mismatchBanner = document.getElementById("mismatchBanner");
     const btnResetSubs = document.getElementById("btnResetSubs");
     const btnPlayPause = document.getElementById("btnPlayPause");
     const playIcon = document.getElementById("playIcon");
@@ -912,6 +966,107 @@
           subtitleData = normalizeItems(parsed);
         }
       } catch (e) { /* 忽略损坏缓存 */ }
+    }
+
+    function updateSubBanner() {
+      const n = subtitleData.length;
+      const isBuiltin = subtitleData === BUILTIN_SUBTITLE_DATA || (
+        BUILTIN_SUBTITLE_DATA && n === BUILTIN_SUBTITLE_DATA.length && n > 0 &&
+        subtitleData[0] && BUILTIN_SUBTITLE_DATA[0] &&
+        subtitleData[0].en === BUILTIN_SUBTITLE_DATA[0].en
+      );
+      if (subFileName) {
+        subFileName.textContent = n ? `${n} 句台词` : "还没有台词";
+      }
+      if (subStatusText) {
+        subStatusText.textContent = n
+          ? (isBuiltin && MOVIE_META && MOVIE_META.id === "demo"
+            ? "当前是演示课文；自己的音频请再导入配套字幕"
+            : "已与本页配对，点击句子即可跳转")
+          : "逐句跟读需要字幕，请导入 SRT / ASS";
+      }
+      if (subBanner) {
+        subBanner.classList.toggle("loaded", n > 0 && !isMismatch());
+        subBanner.classList.toggle("warn", isMismatch() || n === 0);
+      }
+      if (mismatchBanner) mismatchBanner.classList.toggle("show", isMismatch());
+    }
+
+    function isMismatch() {
+      const dur = audio && audio.duration;
+      if (!dur || !isFinite(dur) || dur <= 0 || !subtitleData.length) {
+        return !!(dur && dur > 90 && subtitleData.length === 0);
+      }
+      const lastEnd = subtitleData.reduce((m, it) => Math.max(m, Number(it.end) || 0), 0);
+      const firstStart = subtitleData.reduce((m, it) => Math.min(m, Number(it.start) || 0), Infinity);
+      if (firstStart > dur + 1) return true;
+      if (dur > lastEnd + 60) return true;
+      return false;
+    }
+
+    function classifyLessonFile(file) {
+      const name = String((file && file.name) || "").toLowerCase();
+      const type = String((file && file.type) || "").toLowerCase();
+      if (/\.(srt|vtt|ass|ssa|lrc|json|txt)$/.test(name)) return "sub";
+      if (type.startsWith("audio/") || type.startsWith("video/")) return "audio";
+      if (/\.(m4a|mp3|wav|aac|flac|ogg|opus|mp4|m4v|mkv|mov)$/.test(name)) return "audio";
+      return "unknown";
+    }
+
+    function parseSubtitleFile(name, buffer) {
+      const lower = String(name || "").toLowerCase();
+      const text = decodeSubtitleBuffer(buffer);
+      const trimmed = text.trim();
+      if (lower.endsWith(".json") || trimmed.startsWith("[") || trimmed.startsWith("{")) {
+        try { return normalizeItems(JSON.parse(text)); } catch (e) { /* 按字幕文本再试 */ }
+      }
+      const isAss = lower.endsWith(".ass") || lower.endsWith(".ssa") ||
+        /\[Script Info\]/i.test(text) || /^\s*Dialogue\s*:/m.test(text);
+      return buildItems(text, isAss);
+    }
+
+    function applyAudioFile(file) {
+      if (!file) return;
+      if (state.audioObjectUrl) URL.revokeObjectURL(state.audioObjectUrl);
+      state.audioObjectUrl = URL.createObjectURL(file);
+      state.pendingSeek = null;
+      audio.src = state.audioObjectUrl;
+      audio.load();
+      audio.playbackRate = state.playbackRate;
+      audioBanner.classList.add("loaded");
+      audioFileName.textContent = `🎵 ${file.name}`;
+      audioStatusText.textContent = `大小: ${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+      btnSelectAudio.textContent = "更换音频";
+      timeTotal.textContent = "0:00";
+      progressFill.style.width = "0%";
+      timeCurrent.textContent = "0:00";
+      updatePlayIcon(false);
+      if (state.currentIndex === -1 && subtitleData.length > 0) {
+        state.currentIndex = 0;
+        updateActiveCard();
+        updatePlayerUI();
+      }
+      setupMediaSession(file.name);
+      updateSubBanner();
+      const longAudioShortSubs = file.size > 5 * 1024 * 1024 && subtitleData.length > 0 && subtitleData.length < 50;
+      toast((longAudioShortSubs || isMismatch())
+        ? "音频已载入。当前台词对不上，请再导入配套字幕"
+        : "音频已载入，点击任意台词开始逐句精听");
+    }
+
+    function applySubtitleItems(items, sourceName) {
+      if (!items.length) {
+        toast("没有解析出任何台词，请确认是 SRT / VTT / ASS 字幕");
+        return false;
+      }
+      subtitleData = items;
+      saveCachedSubtitles(subtitleData);
+      state.currentIndex = -1;
+      renderSubtitles();
+      updatePlayerUI();
+      updateSubBanner();
+      toast(`已载入 ${subtitleData.length} 句字幕${sourceName ? "（" + sourceName + "）" : ""}`);
+      return true;
     }
 
     // ---------------- 字幕解析 ----------------
@@ -1287,6 +1442,7 @@
         try { audio.currentTime = state.pendingSeek; } catch (e) { /* 忽略 */ }
         state.pendingSeek = null;
       }
+      updateSubBanner();
     });
 
     audio.addEventListener("play", () => updatePlayIcon(true));
@@ -1467,71 +1623,58 @@
 
     audioFileInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
+      audioFileInput.value = "";
       if (!file) return;
-
-      if (state.audioObjectUrl) URL.revokeObjectURL(state.audioObjectUrl); // 释放上一个文件
-      state.audioObjectUrl = URL.createObjectURL(file);
-      state.pendingSeek = null;
-      audio.src = state.audioObjectUrl;
-      audio.load();
-      audio.playbackRate = state.playbackRate;
-
-      audioBanner.classList.add("loaded");
-      audioFileName.textContent = `🎵 ${file.name}`;
-      audioStatusText.textContent = `大小: ${(file.size / (1024 * 1024)).toFixed(1)} MB · 离线随时可放`;
-      btnSelectAudio.textContent = "更换音频";
-      timeTotal.textContent = "0:00";
-      progressFill.style.width = "0%";
-      timeCurrent.textContent = "0:00";
-      updatePlayIcon(false); // 新文件从暂停状态开始
-
-      // 高亮第一句，但不自动播放（移动端自动播放可能被拦截）
-      if (state.currentIndex === -1 && subtitleData.length > 0) {
-        state.currentIndex = 0;
-        updateActiveCard();
-        updatePlayerUI();
-      }
-      setupMediaSession(file.name);
-      toast("音频已载入，点击任意台词开始逐句精听");
+      applyAudioFile(file);
     });
 
-    // 字幕文件导入（.srt / .vtt / .ass / .ssa / .lrc / .json，自动识别编码）
-    btnImportSub.addEventListener("click", () => subFileInput.click());
-
-    subFileInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
+    function importSubtitleFile(file) {
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
-          const lower = file.name.toLowerCase();
-          let items;
-          if (lower.endsWith(".json")) {
-            items = normalizeItems(JSON.parse(decodeSubtitleBuffer(event.target.result)));
-          } else {
-            const text = decodeSubtitleBuffer(event.target.result);
-            items = buildItems(text, lower.endsWith(".ass") || lower.endsWith(".ssa"));
-          }
-
-          if (!items.length) {
-            toast("没有解析出任何台词，请确认字幕后缀与内容格式（SRT / VTT / ASS）");
-            return;
-          }
-          subtitleData = items;
-          saveCachedSubtitles(subtitleData);
-          state.currentIndex = -1;
-          renderSubtitles();
-          updatePlayerUI();
-          toast(`成功解析并载入 ${subtitleData.length} 句字幕（已保存到本机）`);
+          const items = parseSubtitleFile(file.name, event.target.result);
+          applySubtitleItems(items, file.name);
         } catch (err) {
           toast("字幕文件解析失败：请确保是标准 SRT / VTT / ASS / JSON 文件");
-        } finally {
-          subFileInput.value = ""; // 允许重复选择同一文件
         }
       };
       reader.readAsArrayBuffer(file);
+    }
+
+    // 字幕文件导入（.srt / .vtt / .ass / .ssa / .lrc / .json / .txt，自动识别编码）
+    function openSubPicker() { subFileInput.click(); }
+    btnImportSub.addEventListener("click", openSubPicker);
+    if (btnImportSubBanner) btnImportSubBanner.addEventListener("click", openSubPicker);
+
+    subFileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      subFileInput.value = "";
+      if (!file) return;
+      importSubtitleFile(file);
     });
+
+    if (btnImportLesson && lessonFileInput) {
+      btnImportLesson.addEventListener("click", () => lessonFileInput.click());
+      lessonFileInput.addEventListener("change", (e) => {
+        const files = Array.from(e.target.files || []);
+        lessonFileInput.value = "";
+        if (!files.length) return;
+        const audioFiles = [];
+        const subFiles = [];
+        const unknown = [];
+        files.forEach((f) => {
+          const kind = classifyLessonFile(f);
+          if (kind === "audio") audioFiles.push(f);
+          else if (kind === "sub") subFiles.push(f);
+          else unknown.push(f);
+        });
+        if (audioFiles[0]) applyAudioFile(audioFiles[0]);
+        const sub = subFiles[0] || unknown[0];
+        if (sub) importSubtitleFile(sub);
+        if (!audioFiles[0] && !sub) toast("没有识别到音频或字幕，请同时选中两个文件");
+      });
+    }
 
     // 恢复内置字幕（清除导入缓存）
     btnResetSubs.addEventListener("click", () => {
@@ -1548,6 +1691,7 @@
       searchInput.value = "";
       renderSubtitles();
       updatePlayerUI();
+      updateSubBanner();
       toast("已恢复内置字幕");
     });
 
@@ -1590,6 +1734,7 @@
           updatePlayerUI();
         }
         setupMediaSession(audioFile);
+        updateSubBanner();
       };
       probe.addEventListener("loadedmetadata", onOk, { once: true });
       probe.addEventListener("error", () => { /* 同目录无此文件时静默忽略 */ }, { once: true });
@@ -1615,6 +1760,7 @@
       document.title = `${MOVIE_META.title} · 逐句精听`;
     }
     loadSettings();
+    loadCachedSubtitles();
     audio.playbackRate = state.playbackRate;
     chipLoop.classList.toggle("active", state.loopSentence);
     chipAutoPause.classList.toggle("active", state.autoPause);
@@ -1625,6 +1771,7 @@
     setupMediaSession(null);
     renderSubtitles();
     updatePlayerUI();
+    updateSubBanner();
     tryAutoLoadAudio();
   </script>
 </body>
