@@ -774,7 +774,7 @@
       <label for="driveClientIdInput">OAuth 客户端 ID（私有文件夹，需 Google 登录）</label>
       <input id="driveClientIdInput" class="drive-input" type="text" autocomplete="off" spellcheck="false" placeholder="xxx.apps.googleusercontent.com">
     </div>
-    <p class="calib-help">创建的是 <strong>API 密钥</strong>，不是 OAuth 客户端。网站限制可先选「无」，API 限制选 Drive API 即可。不要把带 <strong>*</strong> 的地址填进「已获授权的重定向 URI」（那一栏不能写通配符）。若要限制网站，在密钥的「网站」里加两行：<strong>https://niclodian1.github.io</strong> 和 <strong>https://niclodian1.github.io/*</strong>。国内访问 Google 需要你自己的网络条件。</p>
+    <p class="calib-help">API 密钥在 <strong>API 和服务 → 凭据</strong>（<span style="word-break:break-all">console.cloud.google.com/apis/credentials</span>）创建，点「创建凭据 → API 密钥」。你现在若在「身份验证平台 → 客户端」，那里只有 OAuth：应用类型选 <strong>Web 应用</strong>，JavaScript 来源填 <strong>https://niclodian1.github.io</strong>（不要带 *、不要带路径），重定向 URI 留空，把客户端 ID 贴到下面后点 Google 登录。</p>
     <p class="calib-help" id="driveStatus">同一文件夹里放一条音频和一个 .srt / .ass 即可。</p>
     <div class="calib-btns">
       <button class="calib-btn" id="btnDriveLoad" type="button">保存并载入</button>

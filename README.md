@@ -195,9 +195,9 @@ GitHub 单文件上限 100 MB，公开仓库也不适合存放私人长音频。
 
 **API 密钥（下次打开自动载入）**
 
-- Google Cloud 新建项目 → 启用 **Google Drive API** → 创建 **API 密钥**（不要选 OAuth 客户端 ID）
-- 应用程序限制可先选「无」；API 限制选 Google Drive API。不要把带 `*` 的地址填进「已获授权的重定向 URI」
-- 若要限制网站，在密钥的「网站」里加两行：`https://niclodian1.github.io` 和 `https://niclodian1.github.io/*`（镜像再加 `https://cdn.jsdmirror.com` 与 `https://cdn.jsdmirror.com/*`）
+- Google Cloud 新建项目 → 启用 **Google Drive API**
+- API 密钥在 [API 和服务 → 凭据](https://console.cloud.google.com/apis/credentials) 创建（「身份验证平台 → 客户端」里没有这一项）。点 **创建凭据 → API 密钥**。应用程序限制可先选「无」，API 限制选 Google Drive API
+- 若控制台只有 OAuth：应用类型选 **Web 应用**，JavaScript 来源填 `https://niclodian1.github.io`（不要带 `*`、不要带路径），重定向 URI 留空，把客户端 ID 贴到学习页后点「Google 登录」
 - 文件夹共享设为「知道链接的任何人」可查看
 - 把密钥贴到学习页，点「保存并载入」
 
