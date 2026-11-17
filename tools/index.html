@@ -807,6 +807,7 @@
     const SETTINGS_KEY = `${STORE_PREFIX}:settings`;
     const FAVS_KEY = `${STORE_PREFIX}:favs`;
     const SUBS_CACHE_KEY = `${STORE_PREFIX}:subs_cache`;
+    const PROGRESS_KEY = `${STORE_PREFIX}:progress`;
     // 字幕组署名、网址等噪声行过滤
     const NOISE_RE = /(YYeTs|人人影视|字幕组|www\.|https?:\/\/)/i;
     // 片头标题卡（如 "主演: 示例演员"）过滤
@@ -826,7 +827,8 @@
       offsetTouched: false,
       pendingSeek: null,
       audioObjectUrl: null,
-      favorites: new Set()
+      favorites: new Set(),
+      restored: false
     };
 
     // DOM 元素引用
@@ -924,6 +926,54 @@
           offsetTouched: state.offsetTouched
         }));
       } catch (e) { /* 隐私模式等场景忽略 */ }
+    }
+
+    let progressTimer = null;
+    function saveProgress() {
+      if (state.currentIndex < 0 || !subtitleData[state.currentIndex]) return;
+      const item = subtitleData[state.currentIndex];
+      let audioTime = item.start + state.offset;
+      if (hasAudioSource() && isFinite(audio.currentTime) && audio.currentTime > 0) {
+        audioTime = audio.currentTime;
+      }
+      try {
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+          index: state.currentIndex,
+          id: item.id,
+          audioTime,
+          savedAt: Date.now()
+        }));
+      } catch (e) { /* 隐私模式等场景忽略 */ }
+    }
+
+    function scheduleSaveProgress() {
+      if (progressTimer) return;
+      progressTimer = setTimeout(() => {
+        progressTimer = null;
+        saveProgress();
+      }, 800);
+    }
+
+    function restoreProgress() {
+      try {
+        const p = JSON.parse(localStorage.getItem(PROGRESS_KEY) || "null");
+        if (!p || typeof p !== "object") return false;
+        let idx = -1;
+        if (p.id != null) idx = subtitleData.findIndex((it) => it.id === Number(p.id));
+        if (idx < 0 && Number.isInteger(p.index) && p.index >= 0 && p.index < subtitleData.length) {
+          idx = p.index;
+        }
+        if (idx < 0) return false;
+        state.currentIndex = idx;
+        const t = Number(p.audioTime);
+        if (isFinite(t) && t >= 0) state.pendingSeek = t;
+        else state.pendingSeek = subtitleData[idx].start + state.offset;
+        updateActiveCard();
+        updatePlayerUI();
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
 
     function loadSettings() {
@@ -1029,7 +1079,6 @@
       if (!file) return;
       if (state.audioObjectUrl) URL.revokeObjectURL(state.audioObjectUrl);
       state.audioObjectUrl = URL.createObjectURL(file);
-      state.pendingSeek = null;
       audio.src = state.audioObjectUrl;
       audio.load();
       audio.playbackRate = state.playbackRate;
@@ -1051,7 +1100,9 @@
       const longAudioShortSubs = file.size > 5 * 1024 * 1024 && subtitleData.length > 0 && subtitleData.length < 50;
       toast((longAudioShortSubs || isMismatch())
         ? "音频已载入。当前台词对不上，请再导入配套字幕"
-        : "音频已载入，点击任意台词开始逐句精听");
+        : (state.restored
+          ? "音频已载入，已跳到上次学到的位置"
+          : "音频已载入，点击任意台词开始逐句精听"));
     }
 
     function applySubtitleItems(items, sourceName) {
@@ -1063,9 +1114,13 @@
       saveCachedSubtitles(subtitleData);
       state.currentIndex = -1;
       renderSubtitles();
+      const resumed = restoreProgress();
+      if (resumed) state.restored = true;
       updatePlayerUI();
       updateSubBanner();
-      toast(`已载入 ${subtitleData.length} 句字幕${sourceName ? "（" + sourceName + "）" : ""}`);
+      toast(resumed
+        ? `已载入 ${subtitleData.length} 句，并回到上次位置`
+        : `已载入 ${subtitleData.length} 句字幕${sourceName ? "（" + sourceName + "）" : ""}`);
       return true;
     }
 
@@ -1337,10 +1392,12 @@
       updatePlayerUI();
 
       if (!hasAudioSource()) {
+        saveProgress();
         toast("请先点击上方【载入音频】，选择本机保存的音频文件");
         return;
       }
       seekAudio(item.start + state.offset);
+      saveProgress();
       audio.play().catch(err => {
         if (err && err.name !== "AbortError") {
           toast("播放失败：请再次点击播放按钮，或检查音频格式是否被浏览器支持");
@@ -1429,24 +1486,32 @@
       if (!state.loopSentence && !audio.paused) {
         syncIndexToTime(sub);
       }
+      if (state.currentIndex >= 0) scheduleSaveProgress();
     });
 
     audio.addEventListener("seeked", () => {
       updateTimeUI(audio.currentTime);
       syncIndexToTime(audio.currentTime - state.offset);
+      scheduleSaveProgress();
     });
 
     audio.addEventListener("loadedmetadata", () => {
       timeTotal.textContent = formatTime(audio.duration);
       if (state.pendingSeek !== null) {
-        try { audio.currentTime = state.pendingSeek; } catch (e) { /* 忽略 */ }
+        const max = isFinite(audio.duration) ? Math.max(0, audio.duration - 0.05) : state.pendingSeek;
+        try { audio.currentTime = Math.max(0, Math.min(state.pendingSeek, max)); } catch (e) { /* 忽略 */ }
         state.pendingSeek = null;
+        syncIndexToTime(audio.currentTime - state.offset);
+        updateTimeUI(audio.currentTime);
       }
       updateSubBanner();
     });
 
     audio.addEventListener("play", () => updatePlayIcon(true));
-    audio.addEventListener("pause", () => updatePlayIcon(false));
+    audio.addEventListener("pause", () => {
+      updatePlayIcon(false);
+      saveProgress();
+    });
     audio.addEventListener("error", () => {
       if (hasAudioSource()) toast("无法播放该音频：建议使用 .m4a / .mp3 格式（大文件建议先压缩）");
     });
@@ -1770,9 +1835,22 @@
     updateCalibUI();
     setupMediaSession(null);
     renderSubtitles();
+    if (restoreProgress()) {
+      state.restored = true;
+      const item = subtitleData[state.currentIndex];
+      if (item) toast(`已回到第 ${item.id} 句，点播放继续`);
+    }
     updatePlayerUI();
     updateSubBanner();
     tryAutoLoadAudio();
+    if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") saveProgress();
+      });
+    }
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("pagehide", saveProgress);
+    }
   </script>
 </body>
 </html>

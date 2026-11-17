@@ -57,7 +57,7 @@ const URLStub = { createObjectURL() { return "blob:fake-" + Math.random().toStri
 const epilogue = `
 module.exports = {
   state, playSentence, resumePlayback, renderSubtitles, syncIndexToTime,
-  toggleFavorite, parseTimestamp, nudgeOffset,
+  toggleFavorite, parseTimestamp, nudgeOffset, saveProgress, restoreProgress,
   defaultOffset: DEFAULT_OFFSET,
   getData: () => subtitleData,
   builtin: BUILTIN_SUBTITLE_DATA
@@ -186,6 +186,17 @@ playSentence(4);
 check("微调后跳转使用新偏移", Math.abs(audio.currentTime - (data[4].start + 0.5)) < 1e-9, audio.currentTime);
 api.nudgeOffset(-0.5);
 check("再微调 -0.5s 复原", Math.abs(state.offset - 0) < 1e-9, state.offset);
+
+console.log("== 13. 学习进度恢复 ==");
+playSentence(4);
+const saved = JSON.parse(store["movie:demo:progress"] || "{}");
+check("进度已写入本地", saved.index === 4 && saved.id === data[4].id, saved);
+const prevIdx = state.currentIndex;
+state.currentIndex = -1;
+state.pendingSeek = null;
+const restored = api.restoreProgress();
+check("再次进入能回到原句", restored && state.currentIndex === prevIdx, { restored, idx: state.currentIndex, prevIdx });
+check("恢复后会待跳转到原进度", Math.abs(Number(state.pendingSeek) - (data[4].start + OFF)) < 1e-6, state.pendingSeek);
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);
