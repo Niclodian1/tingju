@@ -94,7 +94,7 @@
       padding: 2px 7px;
     }
 
-    .movie-actions { display: flex; gap: 10px; }
+    .movie-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
     .btn {
       flex: 1;
@@ -158,7 +158,7 @@
 
   <script>
     /* __LIBRARY_DATA_START__ */
-    let library = [{"id":"demo","title":"每日口语（演示）","audioFile":"audio.m4a","lines":12,"offset":0.0,"htmlFile":"learning.html","builtAt":"2026-11-17T10:47:33"}];
+    let library = [{"id":"demo","title":"每日口语（演示）","audioFile":"audio.m4a","lines":12,"offset":0.0,"htmlFile":"learning.html","builtAt":"2026-11-17T11:16:00"}];
     /* __LIBRARY_DATA_END__ */
 
     function escapeHtml(s) {
@@ -203,10 +203,11 @@
       <h2>导入我的课文</h2>
       <div class="movie-meta">
         <span class="tag">音频 + 字幕</span>
-        <span>自己的材料在手机上逐句跟读</span>
+        <span>本机选择，或从 Google Drive 文件夹载入</span>
       </div>
       <div class="movie-actions">
-        <a class="btn btn-secondary" href="movies/demo/learning.html?import=1">导入音频和字幕</a>
+        <a class="btn btn-secondary" href="movies/demo/learning.html?import=1">本机导入</a>
+        <a class="btn btn-primary" href="movies/demo/learning.html?import=1&drive=1">云端文件夹</a>
       </div>
     `;
     grid.appendChild(importCard);

@@ -614,6 +614,41 @@
       width: 100%;
       flex: none;
     }
+
+    .drive-field label {
+      display: block;
+      font-size: 0.74rem;
+      color: var(--text-secondary);
+    }
+
+    .drive-input {
+      width: 100%;
+      margin: 4px 0 10px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: var(--radius-sm);
+      padding: 9px 10px;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .drive-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-action.ghost {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+
+    .banner-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 16px;
+    }
   </style>
 </head>
 <body>
@@ -661,6 +696,9 @@
       <div class="toggle-chip" id="chipCalib">
         <span>🎯</span> 时间轴校准
       </div>
+      <div class="toggle-chip" id="chipDrive">
+        <span>☁️</span> 云端文件夹
+      </div>
     </div>
   </header>
 
@@ -688,7 +726,10 @@
       </div>
       <button class="btn-action" id="btnImportSubBanner">导入字幕</button>
     </div>
-    <button class="btn-action" id="btnImportLesson" style="align-self:flex-start;margin:0 16px;">同时导入音频+字幕</button>
+    <div class="banner-actions">
+      <button class="btn-action" id="btnImportLesson">同时导入音频+字幕</button>
+      <button class="btn-action ghost" id="btnOpenDrive">从云端载入</button>
+    </div>
   </div>
   <div class="mismatch-banner" id="mismatchBanner">
     当前台词和这段音频对不上。载入音频不会自动生成句子，请再点「导入字幕」，选择配套的 .srt / .ass 文件（iPhone 可在「文件」里把字幕改成 .txt 再选）。
@@ -711,6 +752,36 @@
     <p class="calib-help">先点一句台词播放：声音比字幕<strong>晚</strong>出现 → 调大偏移；声音比字幕<strong>早</strong>出现 → 调小偏移。调到"声音与高亮句子吻合"即可，设置会自动保存。</p>
     <div class="calib-actions">
       <button class="calib-btn" id="calibReset">重置为默认</button>
+    </div>
+  </div>
+
+  <!-- Google Drive：网页直读文件夹，文件留在云端 -->
+  <div class="calib-panel" id="drivePanel">
+    <div class="calib-row">
+      <span class="calib-label">☁️ 云端文件夹</span>
+      <span class="calib-value" id="driveBadge">未连接</span>
+    </div>
+    <p class="calib-help">把音频和配套字幕放进同一个 Drive 文件夹。本页打开时直接读取，文件留在云端。</p>
+    <div class="drive-field">
+      <label for="driveFolderInput">文件夹链接</label>
+      <input id="driveFolderInput" class="drive-input" type="url" autocomplete="off" placeholder="https://drive.google.com/drive/folders/…">
+    </div>
+    <div class="drive-field">
+      <label for="driveApiKeyInput">API 密钥（文件夹设为「知道链接的任何人」时用）</label>
+      <input id="driveApiKeyInput" class="drive-input" type="text" autocomplete="off" spellcheck="false" placeholder="Google Cloud 的 Drive API 密钥">
+    </div>
+    <div class="drive-field">
+      <label for="driveClientIdInput">OAuth 客户端 ID（私有文件夹，需 Google 登录）</label>
+      <input id="driveClientIdInput" class="drive-input" type="text" autocomplete="off" spellcheck="false" placeholder="xxx.apps.googleusercontent.com">
+    </div>
+    <p class="calib-help">在 Google Cloud 启用 Drive API 后创建密钥，并把 HTTP 引用来源限制为 <strong>https://niclodian1.github.io/*</strong> 以及你实际打开的镜像。OAuth 把这些地址加到「已获授权的 JavaScript 来源」。国内访问 Google 需要你自己的网络条件。</p>
+    <p class="calib-help" id="driveStatus">同一文件夹里放一条音频和一个 .srt / .ass 即可。</p>
+    <div class="calib-btns">
+      <button class="calib-btn" id="btnDriveLoad" type="button">保存并载入</button>
+      <button class="calib-btn" id="btnDriveGoogle" type="button">Google 登录</button>
+    </div>
+    <div class="calib-actions">
+      <button class="calib-btn" id="btnDriveClear" type="button">清除云端设置</button>
     </div>
   </div>
 
@@ -808,6 +879,7 @@
     const FAVS_KEY = `${STORE_PREFIX}:favs`;
     const SUBS_CACHE_KEY = `${STORE_PREFIX}:subs_cache`;
     const PROGRESS_KEY = `${STORE_PREFIX}:progress`;
+    const DRIVE_STORE_KEY = "tingju:drive";
     // 字幕组署名、网址等噪声行过滤
     const NOISE_RE = /(YYeTs|人人影视|字幕组|www\.|https?:\/\/)/i;
     // 片头标题卡（如 "主演: 示例演员"）过滤
@@ -828,7 +900,9 @@
       pendingSeek: null,
       audioObjectUrl: null,
       favorites: new Set(),
-      restored: false
+      restored: false,
+      driveAccessToken: "",
+      driveLoading: false
     };
 
     // DOM 元素引用
@@ -877,6 +951,17 @@
     const calibPanel = document.getElementById("calibPanel");
     const calibValue = document.getElementById("calibValue");
     const calibReset = document.getElementById("calibReset");
+    const chipDrive = document.getElementById("chipDrive");
+    const drivePanel = document.getElementById("drivePanel");
+    const driveBadge = document.getElementById("driveBadge");
+    const driveFolderInput = document.getElementById("driveFolderInput");
+    const driveApiKeyInput = document.getElementById("driveApiKeyInput");
+    const driveClientIdInput = document.getElementById("driveClientIdInput");
+    const driveStatus = document.getElementById("driveStatus");
+    const btnOpenDrive = document.getElementById("btnOpenDrive");
+    const btnDriveLoad = document.getElementById("btnDriveLoad");
+    const btnDriveGoogle = document.getElementById("btnDriveGoogle");
+    const btnDriveClear = document.getElementById("btnDriveClear");
 
     // ---------------- 基础设施：轻提示 / 存储 / 时间格式 ----------------
 
@@ -1075,34 +1160,129 @@
       return buildItems(text, isAss);
     }
 
-    function applyAudioFile(file) {
-      if (!file) return;
-      if (state.audioObjectUrl) URL.revokeObjectURL(state.audioObjectUrl);
-      state.audioObjectUrl = URL.createObjectURL(file);
-      audio.src = state.audioObjectUrl;
+    function applyAudioUrl(url, label, sizeBytes, opts) {
+      opts = opts || {};
+      if (!url) return;
+      if (state.audioObjectUrl && state.audioObjectUrl !== url) {
+        try { URL.revokeObjectURL(state.audioObjectUrl); } catch (e) { /* 忽略 */ }
+        state.audioObjectUrl = null;
+      }
+      audio.src = url;
       audio.load();
       audio.playbackRate = state.playbackRate;
-      audioBanner.classList.add("loaded");
-      audioFileName.textContent = `🎵 ${file.name}`;
-      audioStatusText.textContent = `大小: ${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-      btnSelectAudio.textContent = "更换音频";
-      timeTotal.textContent = "0:00";
-      progressFill.style.width = "0%";
-      timeCurrent.textContent = "0:00";
+      if (audioBanner) audioBanner.classList.add("loaded");
+      if (audioFileName) audioFileName.textContent = `🎵 ${label}`;
+      if (audioStatusText) {
+        audioStatusText.textContent = Number(sizeBytes) > 0
+          ? `大小: ${(Number(sizeBytes) / (1024 * 1024)).toFixed(1)} MB`
+          : (opts.statusText || "音频已载入");
+      }
+      if (btnSelectAudio) btnSelectAudio.textContent = "更换音频";
+      if (timeTotal) timeTotal.textContent = "0:00";
+      if (progressFill) progressFill.style.width = "0%";
+      if (timeCurrent) timeCurrent.textContent = "0:00";
       updatePlayIcon(false);
       if (state.currentIndex === -1 && subtitleData.length > 0) {
         state.currentIndex = 0;
         updateActiveCard();
         updatePlayerUI();
       }
-      setupMediaSession(file.name);
+      setupMediaSession(label);
       updateSubBanner();
-      const longAudioShortSubs = file.size > 5 * 1024 * 1024 && subtitleData.length > 0 && subtitleData.length < 50;
-      toast((longAudioShortSubs || isMismatch())
-        ? "音频已载入。当前台词对不上，请再导入配套字幕"
-        : (state.restored
-          ? "音频已载入，已跳到上次学到的位置"
-          : "音频已载入，点击任意台词开始逐句精听"));
+      if (!opts.silent) {
+        const longAudioShortSubs = Number(sizeBytes) > 5 * 1024 * 1024 && subtitleData.length > 0 && subtitleData.length < 50;
+        toast((longAudioShortSubs || isMismatch())
+          ? "音频已载入。当前台词对不上，请再导入配套字幕"
+          : (state.restored
+            ? "音频已载入，已跳到上次学到的位置"
+            : "音频已载入，点击任意台词开始逐句精听"));
+      }
+    }
+
+    function applyAudioFile(file) {
+      if (!file) return;
+      if (state.audioObjectUrl) URL.revokeObjectURL(state.audioObjectUrl);
+      state.audioObjectUrl = URL.createObjectURL(file);
+      applyAudioUrl(state.audioObjectUrl, file.name, file.size);
+    }
+
+    const DRIVE_AUDIO_RE = /\.(m4a|mp3|wav|aac|flac|ogg|opus|mp4|m4v|mkv|mov|webm)$/i;
+    const DRIVE_SUB_RE = /\.(srt|vtt|ass|ssa|lrc|json)$/i;
+
+    function parseDriveFolderRef(input) {
+      const raw = String(input || "").trim();
+      if (!raw) return null;
+      let folderId = "";
+      let resourceKey = "";
+      if (/^[a-zA-Z0-9_-]{10,}$/.test(raw)) {
+        folderId = raw;
+      } else {
+        const folderMatch = raw.match(/\/(?:folders|drive\/u\/\d+\/folders)\/([a-zA-Z0-9_-]+)/)
+          || raw.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+        const idMatch = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (folderMatch) folderId = folderMatch[1];
+        else if (idMatch) folderId = idMatch[1];
+      }
+      const rk = raw.match(/[?&]resourcekey=([^&]+)/i);
+      if (rk) {
+        try { resourceKey = decodeURIComponent(rk[1]); } catch (e) { resourceKey = rk[1]; }
+      }
+      if (!folderId) return null;
+      return { folderId, resourceKey };
+    }
+
+    function pickDriveLessonFiles(files) {
+      const list = Array.isArray(files) ? files : [];
+      const audioCands = list.filter((f) => {
+        const name = String((f && f.name) || "");
+        const mime = String((f && f.mimeType) || "");
+        if (/^application\/vnd\.google-apps\./.test(mime) && mime !== "application/vnd.google-apps.audio") return false;
+        return DRIVE_AUDIO_RE.test(name) || /^(audio|video)\//.test(mime);
+      });
+      const subCands = list.filter((f) => DRIVE_SUB_RE.test(String((f && f.name) || "")));
+      audioCands.sort((a, b) => Number(b.size || 0) - Number(a.size || 0));
+      const audio = audioCands[0] || null;
+      let sub = null;
+      if (audio) {
+        const stem = String(audio.name || "").replace(/\.[^.]+$/, "").toLowerCase();
+        sub = subCands.find((s) => String(s.name || "").toLowerCase().replace(/\.[^.]+$/, "") === stem)
+          || subCands.find((s) => String(s.name || "").toLowerCase().includes(stem))
+          || subCands[0]
+          || null;
+      } else {
+        sub = subCands[0] || null;
+      }
+      return { audio, sub, audioCount: audioCands.length, subCount: subCands.length };
+    }
+
+    function driveMediaUrl(fileId, auth, extra) {
+      extra = extra || {};
+      const id = encodeURIComponent(fileId);
+      const params = ["alt=media"];
+      if (auth && auth.apiKey) params.push("key=" + encodeURIComponent(auth.apiKey));
+      if (auth && auth.accessToken) params.push("access_token=" + encodeURIComponent(auth.accessToken));
+      if (extra.resourceKey) params.push("resourceKey=" + encodeURIComponent(extra.resourceKey));
+      return `https://www.googleapis.com/drive/v3/files/${id}?${params.join("&")}`;
+    }
+
+    function loadDriveConfig() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(DRIVE_STORE_KEY) || "null");
+        if (!parsed || typeof parsed !== "object") return null;
+        return parsed;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function saveDriveConfig(cfg) {
+      try {
+        localStorage.setItem(DRIVE_STORE_KEY, JSON.stringify(cfg));
+        return true;
+      } catch (e) {
+        toast("云端设置保存失败（本机存储空间不足）");
+        return false;
+      }
     }
 
     function applySubtitleItems(items, sourceName) {
@@ -1513,7 +1693,12 @@
       saveProgress();
     });
     audio.addEventListener("error", () => {
-      if (hasAudioSource()) toast("无法播放该音频：建议使用 .m4a / .mp3 格式（大文件建议先压缩）");
+      if (!hasAudioSource()) return;
+      if (/googleapis\.com\/drive/.test(String(audio.src || audio.currentSrc || ""))) {
+        toast("云端音频无法播放：请检查分享权限和密钥，或点 Google 登录");
+        return;
+      }
+      toast("无法播放该音频：建议使用 .m4a / .mp3 格式（大文件建议先压缩）");
     });
 
     // 播放/暂停按钮
@@ -1648,6 +1833,55 @@
       calibPanel.classList.toggle("show", show);
       chipCalib.classList.toggle("active", show);
     });
+
+    function openDrivePanel() {
+      if (!drivePanel) return;
+      drivePanel.classList.add("show");
+      if (chipDrive) chipDrive.classList.add("active");
+      try { drivePanel.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) { /* 忽略 */ }
+    }
+
+    function setDriveStatus(message) {
+      if (driveStatus) driveStatus.textContent = message;
+    }
+
+    function fillDriveForm(cfg) {
+      cfg = cfg || {};
+      if (driveFolderInput && cfg.folderUrl) driveFolderInput.value = cfg.folderUrl;
+      if (driveApiKeyInput && cfg.apiKey) driveApiKeyInput.value = cfg.apiKey;
+      if (driveClientIdInput && cfg.clientId) driveClientIdInput.value = cfg.clientId;
+      if (driveBadge) {
+        driveBadge.textContent = cfg.lastAudioName
+          ? cfg.lastAudioName
+          : (cfg.folderId ? "已保存" : "未连接");
+      }
+    }
+
+    function readDriveForm() {
+      const folderUrl = driveFolderInput ? String(driveFolderInput.value || "").trim() : "";
+      const apiKey = driveApiKeyInput ? String(driveApiKeyInput.value || "").trim() : "";
+      const clientId = driveClientIdInput ? String(driveClientIdInput.value || "").trim() : "";
+      const parsed = parseDriveFolderRef(folderUrl);
+      return {
+        folderUrl,
+        folderId: parsed ? parsed.folderId : "",
+        resourceKey: parsed ? parsed.resourceKey : "",
+        apiKey,
+        clientId
+      };
+    }
+
+    if (chipDrive) {
+      chipDrive.addEventListener("click", () => {
+        const show = !drivePanel.classList.contains("show");
+        drivePanel.classList.toggle("show", show);
+        chipDrive.classList.toggle("active", show);
+        if (show) {
+          try { drivePanel.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) { /* 忽略 */ }
+        }
+      });
+    }
+    if (btnOpenDrive) btnOpenDrive.addEventListener("click", openDrivePanel);
 
     document.querySelectorAll(".calib-btn[data-delta]").forEach((btn) => {
       btn.addEventListener("click", () => nudgeOffset(parseFloat(btn.dataset.delta)));
@@ -1806,6 +2040,249 @@
       probe.src = audioFile;
     }
 
+    function wantsDrivePanel() {
+      try {
+        return typeof location !== "undefined" && /(?:\?|&)drive=1(?:&|$)/.test(String(location.search || ""));
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function mapDriveError(status, msg) {
+      if (status === 404) return "找不到这个文件夹。请检查链接，或把文件夹设为「知道链接的任何人」可查看。";
+      if (status === 403) return "没有权限读取该文件夹。公开分享请填 API 密钥；私有文件夹请点 Google 登录。";
+      if (status === 401) return "登录已过期，请再点一次 Google 登录。";
+      if (status === 400) return "请求无效。请检查文件夹链接和 API 密钥，并确认已启用 Drive API。";
+      return "云端读取失败：" + (msg || status);
+    }
+
+    function driveHeaders(auth, resourceFileId) {
+      const headers = {};
+      if (auth && auth.accessToken) headers.Authorization = "Bearer " + auth.accessToken;
+      if (auth && auth.resourceKey) {
+        const id = resourceFileId || auth.folderId;
+        if (id) headers["X-Goog-Drive-Resource-Keys"] = id + "/" + auth.resourceKey;
+      }
+      return headers;
+    }
+
+    async function listDriveFiles(folderId, auth) {
+      const files = [];
+      let pageToken = "";
+      for (let i = 0; i < 10; i++) {
+        const params = new URLSearchParams({
+          q: `'${folderId}' in parents and trashed=false`,
+          fields: "nextPageToken,files(id,name,mimeType,size,resourceKey)",
+          pageSize: "100",
+          supportsAllDrives: "true",
+          includeItemsFromAllDrives: "true"
+        });
+        if (pageToken) params.set("pageToken", pageToken);
+        if (auth.apiKey) params.set("key", auth.apiKey);
+        let res;
+        try {
+          res = await fetch("https://www.googleapis.com/drive/v3/files?" + params.toString(), {
+            headers: driveHeaders(auth, folderId)
+          });
+        } catch (e) {
+          throw new Error("网络无法访问 Google Drive，请确认当前网络能打开 googleapis.com");
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = (data.error && data.error.message) || ("HTTP " + res.status);
+          throw new Error(mapDriveError(res.status, err));
+        }
+        files.push.apply(files, data.files || []);
+        pageToken = data.nextPageToken || "";
+        if (!pageToken) break;
+      }
+      return files;
+    }
+
+    async function fetchDriveBuffer(fileId, auth, resourceKey) {
+      const url = driveMediaUrl(fileId, auth, { resourceKey: resourceKey || "" });
+      const headers = driveHeaders(auth, fileId);
+      if (resourceKey && auth && auth.resourceKey !== resourceKey) {
+        headers["X-Goog-Drive-Resource-Keys"] = fileId + "/" + resourceKey;
+      }
+      let res;
+      try {
+        res = await fetch(url, { headers });
+      } catch (e) {
+        throw new Error("字幕下载失败：当前网络访问不了 Google");
+      }
+      if (!res.ok) throw new Error(mapDriveError(res.status, "下载字幕失败"));
+      return res.arrayBuffer();
+    }
+
+    let driveGisLoading = null;
+    function loadGoogleIdentity() {
+      if (typeof google !== "undefined" && google.accounts && google.accounts.oauth2) {
+        return Promise.resolve();
+      }
+      if (driveGisLoading) return driveGisLoading;
+      driveGisLoading = new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://accounts.google.com/gsi/client";
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => {
+          driveGisLoading = null;
+          reject(new Error("无法加载 Google 登录组件。请确认当前网络能打开 accounts.google.com"));
+        };
+        (document.head || document.documentElement).appendChild(s);
+      });
+      return driveGisLoading;
+    }
+
+    function requestDriveAccessToken(clientId, interactive) {
+      return loadGoogleIdentity().then(() => new Promise((resolve, reject) => {
+        try {
+          const client = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: "https://www.googleapis.com/auth/drive.readonly",
+            callback: (resp) => {
+              if (resp && resp.access_token) resolve(resp.access_token);
+              else reject(new Error((resp && (resp.error_description || resp.error)) || "未获得 Google 授权"));
+            },
+            error_callback: (err) => {
+              const msg = (err && (err.message || err.type)) || "Google 登录已取消";
+              reject(new Error(msg));
+            }
+          });
+          client.requestAccessToken(interactive ? { prompt: "consent" } : { prompt: "" });
+        } catch (e) {
+          reject(e);
+        }
+      }));
+    }
+
+    async function loadDriveLesson(opts) {
+      opts = opts || {};
+      if (state.driveLoading) return;
+      const form = readDriveForm();
+      if (!form.folderId) {
+        setDriveStatus("请粘贴 Drive 文件夹链接");
+        toast("请先粘贴 Google Drive 文件夹链接");
+        openDrivePanel();
+        return;
+      }
+      let accessToken = state.driveAccessToken;
+      if (!form.apiKey && !accessToken) {
+        if (form.clientId && opts.allowOAuth) {
+          setDriveStatus("正在打开 Google 登录…");
+          try {
+            accessToken = await requestDriveAccessToken(form.clientId, !!opts.interactive);
+            state.driveAccessToken = accessToken;
+          } catch (e) {
+            setDriveStatus(e.message || "Google 登录失败");
+            toast(e.message || "Google 登录失败");
+            openDrivePanel();
+            return;
+          }
+        } else {
+          setDriveStatus("请填写 API 密钥，或填写 OAuth 客户端 ID 后点 Google 登录");
+          toast("云端载入需要 API 密钥或 Google 登录");
+          openDrivePanel();
+          return;
+        }
+      }
+      const auth = {
+        folderId: form.folderId,
+        resourceKey: form.resourceKey,
+        apiKey: form.apiKey,
+        accessToken
+      };
+      state.driveLoading = true;
+      if (btnDriveLoad) btnDriveLoad.textContent = "读取中…";
+      setDriveStatus("正在读取云端文件夹…");
+      try {
+        const files = await listDriveFiles(form.folderId, auth);
+        const picked = pickDriveLessonFiles(files);
+        if (!picked.audio && !picked.sub) {
+          throw new Error("文件夹里没有找到音频或字幕（需要 .m4a/.mp3 和 .srt/.ass 等）");
+        }
+        if (picked.sub) {
+          const buf = await fetchDriveBuffer(picked.sub.id, auth, picked.sub.resourceKey);
+          const items = parseSubtitleFile(picked.sub.name, buf);
+          applySubtitleItems(items, picked.sub.name);
+        }
+        if (picked.audio) {
+          applyAudioUrl(
+            driveMediaUrl(picked.audio.id, auth, { resourceKey: picked.audio.resourceKey }),
+            picked.audio.name,
+            Number(picked.audio.size || 0),
+            { silent: true, statusText: "Google Drive · 在线播放" }
+          );
+        }
+        const cfg = {
+          folderUrl: form.folderUrl,
+          folderId: form.folderId,
+          resourceKey: form.resourceKey,
+          apiKey: form.apiKey,
+          clientId: form.clientId,
+          lastAudioName: picked.audio ? picked.audio.name : "",
+          lastSubName: picked.sub ? picked.sub.name : ""
+        };
+        saveDriveConfig(cfg);
+        fillDriveForm(cfg);
+        const bits = [];
+        if (picked.audio) bits.push(picked.audio.name);
+        if (picked.sub) bits.push(picked.sub.name + " · " + subtitleData.length + " 句");
+        setDriveStatus("已载入：" + bits.join("  +  "));
+        toast(picked.audio && picked.sub
+          ? `已从云端载入音频和 ${subtitleData.length} 句字幕`
+          : (picked.audio ? "已从云端载入音频，还需要字幕文件" : `已从云端载入 ${subtitleData.length} 句字幕，还需要音频`));
+      } catch (e) {
+        setDriveStatus(e.message || "云端载入失败");
+        toast(e.message || "云端载入失败");
+        openDrivePanel();
+      } finally {
+        state.driveLoading = false;
+        if (btnDriveLoad) btnDriveLoad.textContent = "保存并载入";
+      }
+    }
+
+    function shouldAutoLoadDrive() {
+      if (typeof location === "undefined" || !/^https?:$/.test(location.protocol)) return false;
+      const cfg = loadDriveConfig();
+      if (!cfg || !cfg.folderId || !(cfg.apiKey || cfg.clientId)) return false;
+      const isImport = MOVIE_META && MOVIE_META.id === "import";
+      const noBundledAudio = !(MOVIE_META && MOVIE_META.audioFile);
+      return isImport || noBundledAudio || wantsDrivePanel();
+    }
+
+    function tryAutoLoadDrive() {
+      if (!shouldAutoLoadDrive()) return;
+      const cfg = loadDriveConfig() || {};
+      fillDriveForm(cfg);
+      if (cfg.apiKey) {
+        loadDriveLesson({ allowOAuth: false, interactive: false });
+        return;
+      }
+      setDriveStatus("已记住文件夹。私有文件请点 Google 登录后载入");
+      openDrivePanel();
+    }
+
+    if (btnDriveLoad) {
+      btnDriveLoad.addEventListener("click", () => loadDriveLesson({ allowOAuth: true, interactive: false }));
+    }
+    if (btnDriveGoogle) {
+      btnDriveGoogle.addEventListener("click", () => loadDriveLesson({ allowOAuth: true, interactive: true }));
+    }
+    if (btnDriveClear) {
+      btnDriveClear.addEventListener("click", () => {
+        try { localStorage.removeItem(DRIVE_STORE_KEY); } catch (e) { /* 忽略 */ }
+        state.driveAccessToken = "";
+        if (driveFolderInput) driveFolderInput.value = "";
+        if (driveApiKeyInput) driveApiKeyInput.value = "";
+        if (driveClientIdInput) driveClientIdInput.value = "";
+        if (driveBadge) driveBadge.textContent = "未连接";
+        setDriveStatus("已清除云端设置。音频和字幕仍留在 Drive 里。");
+        toast("已清除云端设置");
+      });
+    }
+
     // 桌面端键盘快捷键：空格播放/暂停，←→ 上一句/下一句
     document.addEventListener("keydown", (e) => {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
@@ -1842,7 +2319,10 @@
     }
     updatePlayerUI();
     updateSubBanner();
+    fillDriveForm(loadDriveConfig() || {});
+    if (wantsDrivePanel()) openDrivePanel();
     tryAutoLoadAudio();
+    tryAutoLoadDrive();
     if (typeof document !== "undefined" && document.addEventListener) {
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") saveProgress();

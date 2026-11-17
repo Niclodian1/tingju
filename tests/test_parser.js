@@ -119,6 +119,7 @@ check("书架页包含演示课文", /let library = \[[^;]*demo[^;]*\];/.test(sh
 check("书架数据包含标题", shelf.includes("每日口语"));
 check("书架页链接指向学习页", shelf.includes("movies/${encodeURIComponent(m.id)}/${encodeURIComponent(m.htmlFile"));
 check("书架页动态渲染标题", /escapeHtml\(m\.title/.test(shelf));
+check("书架页含云端文件夹入口", shelf.includes("import=1&drive=1"));
 check("书架页不含片源关键词", !/阿甘|Forrest Gump|forrest_gump|电影天堂|dytt89/i.test(shelf));
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`);

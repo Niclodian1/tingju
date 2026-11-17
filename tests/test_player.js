@@ -58,6 +58,7 @@ const epilogue = `
 module.exports = {
   state, playSentence, resumePlayback, renderSubtitles, syncIndexToTime,
   toggleFavorite, parseTimestamp, nudgeOffset, saveProgress, restoreProgress,
+  parseDriveFolderRef, pickDriveLessonFiles, driveMediaUrl, loadDriveConfig, saveDriveConfig,
   defaultOffset: DEFAULT_OFFSET,
   getData: () => subtitleData,
   builtin: BUILTIN_SUBTITLE_DATA
@@ -197,6 +198,30 @@ state.pendingSeek = null;
 const restored = api.restoreProgress();
 check("再次进入能回到原句", restored && state.currentIndex === prevIdx, { restored, idx: state.currentIndex, prevIdx });
 check("恢复后会待跳转到原进度", Math.abs(Number(state.pendingSeek) - (data[4].start + OFF)) < 1e-6, state.pendingSeek);
+
+console.log("== 14. Google Drive 文件夹解析 ==");
+const folder = api.parseDriveFolderRef("https://drive.google.com/drive/folders/1AbC_Def-123?usp=sharing");
+check("能从分享链接取出文件夹 ID", folder && folder.folderId === "1AbC_Def-123", folder);
+const nested = api.parseDriveFolderRef("https://drive.google.com/drive/u/0/folders/1AbC_Def-123");
+check("能解析 /drive/u/0/folders/ 链接", nested && nested.folderId === "1AbC_Def-123", nested);
+const withKey = api.parseDriveFolderRef("https://drive.google.com/drive/folders/1AbC_Def-123?resourcekey=0-xyz");
+check("能解析 resourceKey", withKey && withKey.resourceKey === "0-xyz", withKey);
+check("纯 ID 也能用", api.parseDriveFolderRef("1AbC_Def-123").folderId === "1AbC_Def-123");
+check("空输入返回空", api.parseDriveFolderRef("") === null);
+const picked = api.pickDriveLessonFiles([
+  { name: "notes.txt", mimeType: "text/plain", size: "10" },
+  { name: "lesson.srt", mimeType: "application/x-subrip", size: "20" },
+  { name: "clip.mp3", mimeType: "audio/mpeg", size: "50" },
+  { name: "audio.m4a", mimeType: "audio/mp4", size: "1000" }
+]);
+check("选最大的音频", picked.audio && picked.audio.name === "audio.m4a", picked.audio);
+check("选配套字幕", picked.sub && picked.sub.name === "lesson.srt", picked.sub);
+const media = api.driveMediaUrl("file1", { apiKey: "k", accessToken: "t" }, { resourceKey: "rk" });
+check("媒体地址带 alt=media", /alt=media/.test(media));
+check("媒体地址带密钥", /key=k/.test(media) && /access_token=t/.test(media) && /resourceKey=rk/.test(media), media);
+api.saveDriveConfig({ folderId: "1AbC_Def-123", apiKey: "k", folderUrl: "https://drive.google.com/drive/folders/1AbC_Def-123" });
+const savedDrive = api.loadDriveConfig();
+check("云端设置写入 tingju:drive", savedDrive && savedDrive.folderId === "1AbC_Def-123" && store["tingju:drive"], savedDrive);
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);
